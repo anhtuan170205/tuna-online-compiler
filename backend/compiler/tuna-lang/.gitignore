@@ -1,0 +1,5 @@
+tuna
+build/
+*.o
+*.d
+.DS_Store

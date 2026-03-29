@@ -1,0 +1,140 @@
+# ----------------------------
+# Run Length Decoder (recursive)
+# Input examples:
+#   5[ab]
+#   3[hello2[world]]
+#   2[a3[b2[cd]]]
+# ----------------------------
+
+
+# ----------------------------
+# Function declarations
+# ----------------------------
+
+func isDigit(ch)
+  if ch == "0" then
+    return 1
+  end
+  if ch == "1" then
+    return 1
+  end
+  if ch == "2" then
+    return 1
+  end
+  if ch == "3" then
+    return 1
+  end
+  if ch == "4" then
+    return 1
+  end
+  if ch == "5" then
+    return 1
+  end
+  if ch == "6" then
+    return 1
+  end
+  if ch == "7" then
+    return 1
+  end
+  if ch == "8" then
+    return 1
+  end
+  if ch == "9" then
+    return 1
+  end
+  return 0
+end
+
+func digitVal(ch)
+  if ch == "0" then
+    return 0
+  end
+  if ch == "1" then
+    return 1
+  end
+  if ch == "2" then
+    return 2
+  end
+  if ch == "3" then
+    return 3
+  end
+  if ch == "4" then
+    return 4
+  end
+  if ch == "5" then
+    return 5
+  end
+  if ch == "6" then
+    return 6
+  end
+  if ch == "7" then
+    return 7
+  end
+  if ch == "8" then
+    return 8
+  end
+  return 9
+end
+
+func repeatStr(s, n)
+  set out := ""
+  set i := 0
+  while i < n do
+    set out := out + s
+    set i := i + 1
+  end
+  return out
+end
+
+# parse sequence until ']' or end
+# returns [decodedString, nextIndex]
+func parseSeq(cs, i)
+  set out := ""
+  set L := len(cs)
+
+  while i < L and cs[i] != "]" do
+
+    if isDigit(cs[i]) == 1 then
+      set n := digitVal(cs[i])
+      set i := i + 1
+
+      # expect '['
+      if i >= L or cs[i] != "[" then
+        return [out, i]
+      end
+      set i := i + 1
+
+      # recursive parse inside
+      set res := parseSeq(cs, i)
+      set inside := res[0]
+      set i := res[1]
+
+      # consume closing ']'
+      if i < L and cs[i] == "]" then
+        set i := i + 1
+      end
+
+      set out := out + repeatStr(inside, n)
+
+    else
+      set out := out + cs[i]
+      set i := i + 1
+    end
+  end
+
+  return [out, i]
+end
+
+func decode(s)
+  set cs := chars(s)
+  set res := parseSeq(cs, 0)
+  return res[0]
+end
+
+# ----------------------------
+# Main program
+# ----------------------------
+
+print "Enter encoded string (e.g., 3[hello2[world]]):"
+set s := readstr()
+print decode(s)

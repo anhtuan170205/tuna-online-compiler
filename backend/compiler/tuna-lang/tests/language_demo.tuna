@@ -1,0 +1,52 @@
+func fact(n)
+  if n <= 1 then
+    return 1
+  else
+    return n * fact(n - 1)
+  end
+end
+
+set a := 3 + 4
+set b := 5 + 6
+print a*b + 1
+
+if a < b then
+  print true
+else
+  print false
+end
+
+set x := 0
+while x < 3 do
+  print x
+  set x := x + 1
+end
+
+set a := 1
+set b := 0
+
+print a and b
+print a or b
+print not b and a
+print "Hello " + "Tuna"
+print "Year " + 2025
+
+set a := [1, 2, 3]
+print a[0]
+print a[1] + 10
+set b := ["hi", " ", "tuna"]
+print b[0] + b[1] + b[2]
+
+set a := [1, 2, 3]
+
+set a[1] := 99
+print a[0]
+print a[1]
+print a[2]
+
+print len(a)
+print fact(6)
+
+print "Enter number n:"
+set n := readint()
+print "n = " + n

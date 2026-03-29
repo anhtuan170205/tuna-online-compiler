@@ -1,0 +1,147 @@
+# ----------------------------
+# Conway's Game of Life (Tuna)
+# ----------------------------
+
+# ----------------------------
+# Function declarations
+# ----------------------------
+
+# build a row of length w filled with 0
+func makeRow(w)
+	set row := []
+	set j := 0
+	while j < w do
+		push(row, 0)
+		set j := j + 1
+	end
+	return row
+end
+
+# build h x w grid filled with 0
+func makeEmptyGrid(h, w)
+	set grid := []
+	set i := 0
+	while i < h do 
+		set row := makeRow(w)
+		push(grid, row)
+		set i := i + 1
+	end
+	return grid
+end
+
+# print grid using "#" and "."
+func render(grid)
+	set h := len(grid)
+	set w := len(grid[0])
+
+	set i := 0
+	while i < h do
+		set j := 0
+		set line := ""
+		while j < w do
+			if grid[i][j] == 1 then
+				set line := line + "#"
+			else
+				set line := line + "."
+			end
+			set j := j + 1
+		end
+		print line
+		set i := i + 1
+	end
+end
+
+# count live neighbors around (r,c)
+func countNeighbors(grid, r, c)
+	set h := len(grid)
+	set w := len(grid[0])
+	set n := 0
+
+	if r-1 >= 0 and c-1 >= 0 then
+		set n := n + grid[r-1][c-1]
+	end
+	if r-1 >= 0 then
+		set n := n + grid[r-1][c]
+	end
+	if r-1 >= 0 and c+1 < w then
+		set n := n + grid[r-1][c+1]
+	end
+	if c-1 >= 0 then
+		set n := n + grid[r][c-1]
+	end
+	if c+1 < w then
+		set n := n + grid[r][c+1]
+	end
+	if r+1 < h and c-1 >= 0 then
+		set n := n + grid[r+1][c-1]
+	end
+	if r+1 < h then
+		set n := n + grid[r+1][c]
+	end
+	if r+1 < h and c+1 < w then
+		set n := n + grid[r+1][c+1]
+	end
+
+	return n
+end
+
+# compute next generation
+func step(grid)
+	set h := len(grid)
+	set w := len(grid[0])
+
+	set next := makeEmptyGrid(h, w)
+
+	set r := 0
+	while r < h do
+		set c := 0
+		while c < w do
+			set n := countNeighbors(grid, r, c)
+
+			if grid[r][c] == 1 then
+				if n < 2 or n > 3 then
+					set next[r][c] := 0
+				else
+					set next[r][c] := 1
+				end
+			else
+				if n == 3 then
+					set next[r][c] := 1
+				else
+					set next[r][c] := 0
+				end
+			end
+
+			set c := c + 1
+		end
+		set r := r + 1
+	end
+
+	return next
+end
+
+# ----------------------------
+# Main program  
+# ----------------------------
+
+set steps := 20
+set gen := 0
+
+set grid := makeEmptyGrid(10, 10)
+
+# seed pattern
+set grid[1][2] := 1
+set grid[2][3] := 1
+set grid[3][1] := 1
+set grid[3][2] := 1
+set grid[3][3] := 1
+
+while gen < steps do 
+	print "Generation " + gen
+	render(grid)
+	print ""
+
+	set grid := step(grid)
+	set gen := gen + 1
+end
+

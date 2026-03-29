@@ -1,0 +1,190 @@
+# ----------------------------
+# Blackjack (Tuna) - function version
+# Controls:
+#   1 = hit
+#   0 = stay
+#   after each round: 1 = play again, 0 = quit
+# ----------------------------
+
+# ----------------------------
+# Function declarations
+# ----------------------------
+
+# card value from rank index
+func cardValue(idx)
+	if idx == 12 then
+		return 11
+	else
+		if idx >= 9 then
+			return 10
+		else
+			return idx + 2
+		end
+	end
+end
+
+# draw a card: return [newTotal, newAces, cardIdx]
+# aces = number of aces currently counted as 11
+func drawCard(total, aces)
+	set idx := rand(13)
+	set v := cardValue(idx)
+
+	set total := total + v
+
+	if idx == 12 then
+		set aces := aces + 1
+	end
+
+	while total > 21 and aces > 0 do
+		set total := total - 10
+		set aces := aces - 1
+	end
+
+	return [total, aces, idx]
+end
+
+# deal n cards and print 
+func dealN(n)
+	set total := 0
+	set aces := 0
+	set k := 0
+
+	while k < n do
+		set r := drawCard(total, aces)
+		set total := r[0]
+		set aces := r[1]
+		set idx := r[2]
+		print "Draws: " + ranks[idx] + "  (total=" + total + ")"
+		set k := k + 1
+	end
+	return [total, aces]
+end
+
+# player's turn 
+func playerTurn(pTotal, pAces)
+	set stay := 0
+	set bust := 0
+	while stay == 0 do
+		print "Hit=1, Stay=0 ?"
+		set choice := readint()
+
+		if choice == 1 then
+			set r := drawCard(pTotal, pAces)
+			set pTotal := r[0]
+			set pAces := r[1]
+			set idx := r[2]
+			print "Player draws: " + ranks[idx] + "  total=" + pTotal
+
+			if pTotal > 21 then
+				set bust := 1
+				set stay := 1
+			end
+		else
+			set stay := 1
+		end
+	end
+	return [pTotal, bust]
+end
+
+# dealer's turn
+func dealerTurn(dTotal, dAces, pTotal)
+	print "Dealer total=" + dTotal
+	while dTotal < 17 or dTotal < pTotal do
+		set r := drawCard(dTotal, dAces)
+		set dTotal := r[0]
+		set dAces := r[1]
+		set idx := r[2]
+		print "Dealer draws: " + ranks[idx] + "  total=" + dTotal
+	end
+	return dTotal
+end
+
+# decide outcome
+func outcome(pTotal, dTotal)
+	if dTotal > 21 then
+		print "Dealer busts! You win."
+		return [1, 0]
+	else
+		if dTotal > pTotal then
+			print "Dealer wins (" + dTotal + " vs " + pTotal + ")."
+			return [0, 1]
+		else
+			if dTotal < pTotal then
+				print "You win (" + pTotal + " vs " + dTotal + ")."
+				return [1, 0]
+			else
+				print "Push (tie) (" + pTotal + " vs " + dTotal + ")."
+				return [0, 0]
+			end
+		end
+	end
+end
+
+# ----------------------------
+# Main program  
+# ----------------------------
+			
+set ranks := ["2","3","4","5","6","7","8","9","10","J","Q","K","A"]
+
+set wins := 0
+set losses := 0
+
+set playing := 1
+
+while playing == 1 do
+	print "=== BLACKJACK ==="
+	print "Score: wins=" + wins + " losses=" + losses
+	print ""
+
+	# --- initial player deal ---
+	print "Player:"
+	set p := dealN(2)
+	set pTotal := p[0]
+	set pAces := p[1]
+
+	print ""
+
+	# --- initial dealer deal ---
+	set dTotal := 0
+	set dAces := 0
+	set first := drawCard(dTotal, dAces)
+	set dTotal := first[0]
+	set dAces := first[1]
+	set idx1 := first[2]
+	print "Dealer shows: " + ranks[idx1]
+
+	set second := drawCard(dTotal, dAces)
+	set dTotal := second[0]
+	set dAces := second[1]
+
+	print ""
+
+	# --- player turn ---
+	set pr := playerTurn(pTotal, pAces)
+	set pTotal := pr[0]
+	set pBust := pr[1]
+
+	print ""
+
+	if pBust == 1 then
+		print "Player busts! You loses."
+		set losses := losses + 1
+	else
+		# --- dealer turn ---
+		set dTotal := dealerTurn(dTotal, dAces, pTotal)
+		print ""
+
+		# --- outcome ---
+		set res := outcome(pTotal, dTotal)
+		set wins := wins + res[0]
+		set losses := losses + res[1]
+	end
+
+	print ""
+	print "Play again? 1=yes, 0=no"
+	set playing := readint()
+	print ""
+
+end
+
+print "Final: wins=" + wins + " losses=" + losses
