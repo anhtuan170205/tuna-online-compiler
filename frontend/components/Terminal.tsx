@@ -1,60 +1,73 @@
 'use client';
 
-import { FitAddon } from '@xterm/addon-fit';
 import React, { useEffect, useRef } from 'react'
-import { Terminal } from 'xterm';
+import '@xterm/xterm/css/xterm.css';
 
 type Props = {
 	socketRef: React.RefObject<WebSocket | null>;
-	onReady: (term: Terminal) => void;
+	onReady: (term: any) => void;
 }
 
 export default function XTerminal({ socketRef, onReady }: Props) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
 
 	useEffect(() => {
-		if (!containerRef.current) return;
+		let term: any = null;
+		let fitAddon: any = null;
+		let resizeHandler: (() => void) | null = null;
+		let dataDisposable: { dispose: () => void } | null = null;
 
-		const term = new Terminal({
-			cursorBlink: true,
-			convertEol: true,
-			fontSize: 14,
-			fontFamily: 'Martian Mono, monospace',
-			theme: { background: '#111'}
-		});
+		const initTerminal = async () => {
+			if (!containerRef.current) return;
 
-		const fitAddon = new FitAddon();
-		term.loadAddon(fitAddon);
+			const { Terminal } = await import('@xterm/xterm');
+			const { FitAddon } = await import('@xterm/addon-fit');
 
-		term.open(containerRef.current);
-		fitAddon.fit();
+			term = new Terminal({
+				cursorBlink: true,
+				convertEol: true,
+				fontSize: 14,
+				theme: {
+					background: '#111111'
+				}
+			});
 
-		term.writeln('Tuna terminal ready');
-		term.writeln('');
+			fitAddon = new FitAddon();
+			term.loadAddon(fitAddon);
+			term.open(containerRef.current);
+			fitAddon.fit();
 
-		onReady(term);
+			term.writeln('Tuna terminal ready.');
+			term.writeln('');
 
-		term.onData(data => {
-			const socket = socketRef.current;
-			if (socket && socket.readyState === WebSocket.OPEN) {
-				socket.send(JSON.stringify({ 
-					type: 'stdin', 
-					data 
-				}));
-			}
-		});
+			onReady(term);
 
-		const handleResize = () => fitAddon.fit();
-		window.addEventListener('resize', handleResize);
+			resizeHandler = () => {
+				fitAddon.fit();
+			};
+
+			dataDisposable = term.onData((data: string) => {
+				const socket = socketRef.current;
+				if (socket && socket.readyState === WebSocket.OPEN) {
+					socket.send(JSON.stringify({
+						type: 'stdin',
+						data
+					})
+					);
+				}
+			});
+			window.addEventListener('resize', resizeHandler);
+		};
+
+		initTerminal();
 
 		return () => {
-			window.removeEventListener('resize', handleResize);
-			term.dispose();
+			if (dataDisposable) dataDisposable.dispose();
+			if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+			if (term) term.dispose();
 		};
-	}, [socketRef, onReady]);
+	}, [onReady, socketRef]);
 
-	return (
-		<div ref={containerRef} className='w-full h-75 border rounded-lg overflow-hidden'/>
-	)
+	return <div ref={containerRef} className='w-full h-96 rounded-lg overflow-hidden border border-gray-300' />;
 }
 

@@ -10,35 +10,42 @@ function setupWebSocket(server) {
 	wss.on('connection', (ws) => {
 		console.log('WS client connected');
 
-		let child = '';
-		let tempDir = '';
+		let child = null;
+		let tempDir = null;
+		let killTimer = null;
+
+		async function cleanup() {
+			if (killTimer) {
+				clearTimeout(killTimer);
+				killTimer = null;
+			}
+
+			if (child && !child.killed) {
+				child.kill('SIGKILL');
+			}
+			child = null;
+
+			if (tempDir) {
+				try {
+					await fs.rm(tempDir, { recursive: true, force: true });
+				} catch {}
+				tempDir = null;
+			}
+		}
 
 		ws.on('message', async (message) => {
 			try {
 				const payload = JSON.parse(message.toString());
 
 				if (payload.type === 'run') {
-					if (child) {
-						child.kill('SIGKILL');
-						child = null;
-					}
-
-					if (tempDir) {
-						try {
-							await fs.rm(tempDir, { recursive: true, force: true });
-						} catch {}
-						tempDir = '';
-					}
+					await cleanup();
 
 					const code = payload.code;
-
 					if (typeof code !== 'string') {
-						if (ws.readyState === WebSocket.OPEN) {
-							ws.send(JSON.stringify({
-								type: 'stderr',
-								data: 'Invalid code format'
-							}));
-						}
+						ws.send(JSON.stringify({
+							type: 'stderr',
+							data: 'Invalid code format'
+						}));
 						return;
 					}
 
@@ -51,6 +58,12 @@ function setupWebSocket(server) {
 					child = spawn(compilerPath, [sourcePath], {
 						stdio: ['pipe', 'pipe', 'pipe']
 					});
+
+					killTimer = setTimeout(() => {
+						if (child && !child.killed) {
+							child.kill('SIGKILL');
+						}
+					}, 30000);
 
 					child.stdout.on('data', (data) => {
 						if (ws.readyState === WebSocket.OPEN) {
@@ -77,14 +90,7 @@ function setupWebSocket(server) {
 								code: code ?? 1
 							}));
 						}
-						
-						if (tempDir) {
-							try {
-								await fs.rm(tempDir, { recursive: true, force: true });
-							} catch {}
-							tempDir = '';
-						}
-						child = null;
+						await cleanup();
 					});
 
 					child.on('error', async (error) => {
@@ -94,24 +100,24 @@ function setupWebSocket(server) {
 								data: error.message || 'Execution failed'
 							}));
 						}
-						
-						if (tempDir) {
-							try {
-								await fs.rm(tempDir, { recursive: true, force: true });
-							} catch {}
-							tempDir = '';
-						}
-						child = null;
+						await cleanup();
 					});
 				}
+
 				if (payload.type === 'stdin') {
-					if (child) {
+					if (child && !child.killed && child.stdin.writable) {
 						child.stdin.write(payload.data);
 					}
 				}
+
 				if (payload.type === 'stop') {
-					if (child) {
-						child.kill('SIGKILL');
+					await cleanup();
+
+					if (ws.readyState === WebSocket.OPEN) {
+						ws.send(JSON.stringify({
+							type: 'exit',
+							code: 137
+						}));
 					}
 				}
 			} catch (error) {
@@ -119,7 +125,7 @@ function setupWebSocket(server) {
 				if (ws.readyState === WebSocket.OPEN) {
 					ws.send(JSON.stringify({
 						type: 'stderr',
-						data: 'Invalid WebSocket message'
+						data: error.message || 'Server error'
 					}));
 				}
 			}
@@ -127,16 +133,7 @@ function setupWebSocket(server) {
 
 		ws.on('close', async () => {
 			console.log('WS client disconnected');
-
-			if (child) {
-				child.kill('SIGKILL');
-			}
-
-			if (tempDir) {
-				try {
-					await fs.rm(tempDir, { recursive: true, force: true });
-				} catch {}
-			}
+			await cleanup();
 		});
 	});
 }

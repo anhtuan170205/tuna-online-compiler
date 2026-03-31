@@ -7,14 +7,11 @@ import XTerminal from "@/components/Terminal";
 
 export default function Home() {
 	const [code, setCode] = useState(`print "Hello, World!"`);
-	const [input, setInput] = useState('');
-	const [output, setOutput] = useState('');
 	const [error, setError] = useState('');
-	const [loading, setLoading] = useState(false);
 	const [interactiveRunning, setInteractiveRunning] = useState(false);
+	const [wsConnected, setWsConnected] = useState(false);
 
 	const monaco = useMonaco();
-
 	const socketRef = useRef<WebSocket | null>(null);
 	const terminalRef = useRef<any>(null);
 
@@ -24,11 +21,15 @@ export default function Home() {
 	}, [monaco]);
 
 	useEffect(() => {
-		const socket = new WebSocket('ws://localhost:5050/');
+		const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+		const wsHost = 'localhost:5050'; // Change if backend is hosted elsewhere
+		const socket = new WebSocket(`${protocol}://${wsHost}/`);
 		socketRef.current = socket;
 
 		socket.onopen = () => {
 			console.log('WebSocket connected');
+			setWsConnected(true);
+			setError('');
 		};
 
 		socket.onmessage = (event) => {
@@ -42,11 +43,12 @@ export default function Home() {
 				}
 
 				if (msg.type === 'stderr') {
-					terminalRef.current.write(`\r\n[stderr] \r\n${msg.data}`);
+					terminalRef.current.write(msg.data);
 				}
 
 				if (msg.type === 'exit') {
 					terminalRef.current.write(`\r\n[Process exited with code ${msg.code}]`);
+					setInteractiveRunning(false);
 				}
 			} catch {
 				console.error('Invalid WebSocket message');
@@ -55,12 +57,15 @@ export default function Home() {
 
 		socket.onclose = () => {
 			console.log('WebSocket disconnected');
+			setWsConnected(false);
 			setInteractiveRunning(false);
 		};
 
 		socket.onerror = () => {
 			console.error('WebSocket error');
+			setWsConnected(false);
 			setInteractiveRunning(false);
+			setError('WebSocket connection failed');
 		};
 
 		return () => {
@@ -69,31 +74,6 @@ export default function Home() {
 	}, []);
 
 	const runCode = async () => {
-		setLoading(true);
-		setOutput("");
-		setError("");
-
-		try {
-			const res = await fetch('http://localhost:5050/api/run', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({ code, input })
-			});
-
-			const data = await res.json();
-
-			setOutput(data.stdout || '');
-			setError(data.stderr || '');
-		} catch (err: any) {
-			setError(err.message || 'Request failed');
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	const runInteractive = () => {
 		const socket = socketRef.current;
 		const term = terminalRef.current;
 
@@ -106,24 +86,24 @@ export default function Home() {
 		setInteractiveRunning(true);
 
 		term.clear();
-		term.writeln('Running Tuna');
+		term.writeln('Running Tuna...');
 		term.writeln('');
 
 		socket.send(JSON.stringify({
 			type: 'run',
-			data: code
+			code
 		}));
 	};
 
-	const stopInteractive = () => {
+	const stopCode = () => {
 		const socket = socketRef.current;
 
 		if (!socket || socket.readyState !== WebSocket.OPEN) return;
-		
+
 		socket.send(JSON.stringify({
 			type: 'stop'
 		}));
-	};
+	}
 
 	return (
 		<main className='p-6 w-full max-w-4xl mx-auto'>
@@ -150,30 +130,23 @@ export default function Home() {
 				onClick={runCode}
 				className='mt-4 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-400'
 				>
-				{loading ? 'Running...' : 'Run Code'}
+				{interactiveRunning ? 'Running...' : 'Run'}
 			</button>
 
-			{/* Run Interactive Button */}
-			<button 
-				onClick={runInteractive}
-				className='mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400'
-				disabled={interactiveRunning}
-				>
-				{interactiveRunning ? 'Interactive Running...' : 'Run Interactive'}
-			</button>
 
-			{/* Stop Interactive Button */}
+			{/* Stop Button */}
 			<button 
-				onClick={stopInteractive}
+				onClick={stopCode}
 				className='mt-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-400'
 				disabled={!interactiveRunning}
 				>
-				Stop Interactive
+				Stop 
 			</button>
 
-			<div className='mt-6'>
-				<h2 className='text-2xl font-semibold mb-2 text-black'>Interactive Terminal</h2>
-				<XTerminal
+			{/* Terminal */}
+			<div className="mt-6">
+				<h2 className="text-2xl font-semibold mb-2 text-black">Terminal</h2>
+					<XTerminal
 					socketRef={socketRef}
 					onReady={(term) => {
 						terminalRef.current = term;
@@ -181,26 +154,11 @@ export default function Home() {
 				/>
 			</div>
 
-			{/* Output */}
-			<div className='mt-6'>
-				<h2 className='text-2xl font-semibold mb-2'>Output:</h2>
-				<pre className='bg-gray-100 p-4 rounded-lg min-h-24 whitespace-pre-wrap'>{output || 'No output'}</pre>
-			</div>
-
-			{/* Input Area */}
-			<h2 className='text-xl font-semibold mb-2'>Input:</h2>
-			<textarea
-				value={input}
-				onChange={(e) => setInput(e.target.value)}
-				placeholder='Program stdin here...'
-				className='w-full h-40 rounded-lg border border-gray-300 p-4 resize-y'
-			/>
-
 			{/* Error */}
 			{error && (
 				<div className='mt-6'>
 					<h2 className='text-2xl font-semibold mb-2 text-red-600'>Error:</h2>
-					<pre className='bg-red-100 p-4 rounded-lg min-h-24 whitespace-pre-wrap'>{error || 'No error'}</pre>
+					<pre className='bg-red-100 p-4 rounded-lg min-h-24 whitespace-pre-wrap'>{error}</pre>
 				</div>
 			)}
 		</main>
