@@ -48,13 +48,35 @@ export default function XTerminal({ socketRef, onReady }: Props) {
 
 			dataDisposable = term.onData((data: string) => {
 				const socket = socketRef.current;
-				if (socket && socket.readyState === WebSocket.OPEN) {
+				if (!socket || socket.readyState !== WebSocket.OPEN) {
+					console.error('WebSocket is not open. Cannot send data:', data);
+					return;
+				}
+
+				if (data === '\r') {
+					term.write('\r\n');
+					socket.send(JSON.stringify({
+						type: 'stdin',
+						data: '\n'
+					}));
+					return;
+				}
+
+				if (data === '\u007f') {
+					term.write('\b \b');
 					socket.send(JSON.stringify({
 						type: 'stdin',
 						data
-					})
-					);
+					}));
+					return;
 				}
+
+				term.write(data);
+
+				socket.send(JSON.stringify({
+					type: 'stdin',
+					data
+				}));
 			});
 			window.addEventListener('resize', resizeHandler);
 		};
@@ -66,7 +88,7 @@ export default function XTerminal({ socketRef, onReady }: Props) {
 			if (resizeHandler) window.removeEventListener('resize', resizeHandler);
 			if (term) term.dispose();
 		};
-	}, [onReady, socketRef]);
+	}, []);
 
 	return <div ref={containerRef} className='w-full h-96 rounded-lg overflow-hidden border border-gray-300' />;
 }

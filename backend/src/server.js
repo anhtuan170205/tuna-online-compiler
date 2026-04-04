@@ -7,6 +7,6 @@ const PORT = 5050;
 const server = http.createServer(app);
 setupWebSocket(server);
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
 	console.log(`Backend server is running on http://localhost:${PORT}`);
 });

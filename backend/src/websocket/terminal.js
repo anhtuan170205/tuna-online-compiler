@@ -6,13 +6,13 @@ const { spawn } = require('child_process');
 
 function setupWebSocket(server) {
 	const wss = new WebSocket.Server({ server });
-
 	wss.on('connection', (ws) => {
 		console.log('WS client connected');
 
 		let child = null;
 		let tempDir = null;
 		let killTimer = null;
+
 
 		async function cleanup() {
 			if (killTimer) {
@@ -36,6 +36,7 @@ function setupWebSocket(server) {
 		ws.on('message', async (message) => {
 			try {
 				const payload = JSON.parse(message.toString());
+				console.log('Received WS message', payload.type);
 
 				if (payload.type === 'run') {
 					await cleanup();
@@ -50,9 +51,10 @@ function setupWebSocket(server) {
 					}
 
 					const compilerPath = path.resolve(__dirname, '../../compiler/tuna-lang/tuna');
-
+					
 					tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tuna-'));
-					const sourcePath = path.join(tempDir, 'main.tuna');
+					const sourcePath = path.join(tempDir, 'main.tuna');	
+
 					await fs.writeFile(sourcePath, code, 'utf-8');
 
 					child = spawn(compilerPath, [sourcePath], {
@@ -87,7 +89,7 @@ function setupWebSocket(server) {
 						if (ws.readyState === WebSocket.OPEN) {
 							ws.send(JSON.stringify({
 								type: 'exit',
-								code: code ?? 1
+								code
 							}));
 						}
 						await cleanup();
@@ -100,11 +102,13 @@ function setupWebSocket(server) {
 								data: error.message || 'Execution failed'
 							}));
 						}
+						sendExit(1);
 						await cleanup();
 					});
 				}
 
 				if (payload.type === 'stdin') {
+					console.log('stdin received:', JSON.stringify(payload.data));
 					if (child && !child.killed && child.stdin.writable) {
 						child.stdin.write(payload.data);
 					}
@@ -112,13 +116,6 @@ function setupWebSocket(server) {
 
 				if (payload.type === 'stop') {
 					await cleanup();
-
-					if (ws.readyState === WebSocket.OPEN) {
-						ws.send(JSON.stringify({
-							type: 'exit',
-							code: 137
-						}));
-					}
 				}
 			} catch (error) {
 				console.error('WS message error:', error);
@@ -132,7 +129,6 @@ function setupWebSocket(server) {
 		});
 
 		ws.on('close', async () => {
-			console.log('WS client disconnected');
 			await cleanup();
 		});
 	});

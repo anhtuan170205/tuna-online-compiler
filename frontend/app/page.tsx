@@ -1,19 +1,39 @@
 'use client';
 
 import { Editor, useMonaco } from "@monaco-editor/react";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { registerTunaLanguage } from "../lib/tunaLanguage";
 import XTerminal from "@/components/Terminal";
 
 export default function Home() {
 	const [code, setCode] = useState(`print "Hello, World!"`);
 	const [error, setError] = useState('');
-	const [interactiveRunning, setInteractiveRunning] = useState(false);
+	const [running, setRunning] = useState(false);
 	const [wsConnected, setWsConnected] = useState(false);
 
 	const monaco = useMonaco();
 	const socketRef = useRef<WebSocket | null>(null);
 	const terminalRef = useRef<any>(null);
+	const handleTerminalReady = useCallback((term: any) => {
+		terminalRef.current = term;
+	}, []);
+
+	const clearTerminal = () => {
+		const socket = socketRef.current;
+		const term = terminalRef.current;
+
+
+		if (socket && socket.readyState === WebSocket.OPEN && running) {
+			socket.send(JSON.stringify({ type: 'stop' }));
+		}
+
+		if (term) {
+			term.clear();
+			term.focus();
+		}
+
+		setRunning(false);
+	};
 
 	useEffect(() => {
 		if (!monaco) return;
@@ -22,21 +42,21 @@ export default function Home() {
 
 	useEffect(() => {
 		const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-		const wsHost = 'localhost:5050'; // Change if backend is hosted elsewhere
-		const socket = new WebSocket(`${protocol}://${wsHost}/`);
-		socketRef.current = socket;
+		const ws = new WebSocket('ws://127.0.0.1:5050');
+		socketRef.current = ws;
 
-		socket.onopen = () => {
-			console.log('WebSocket connected');
+		ws.onopen = () => {
 			setWsConnected(true);
 			setError('');
 		};
 
-		socket.onmessage = (event) => {
+		ws.onmessage = (event) => {
 			try {
 				const msg = JSON.parse(event.data);
 
-				if (!terminalRef.current) return;
+				if (!terminalRef.current) {
+					return;
+				}
 
 				if (msg.type === 'stdout') {
 					terminalRef.current.write(msg.data);
@@ -47,29 +67,27 @@ export default function Home() {
 				}
 
 				if (msg.type === 'exit') {
-					terminalRef.current.write(`\r\n[Process exited with code ${msg.code}]`);
-					setInteractiveRunning(false);
+					// terminalRef.current.writeln(`\r\n[Process exited with code ${msg.code}]`);
+					setRunning(false);
 				}
-			} catch {
-				console.error('Invalid WebSocket message');
+			} catch (e) {
+				console.error('Invalid WebSocket message', e);
 			}
 		};
 
-		socket.onclose = () => {
-			console.log('WebSocket disconnected');
+		ws.onclose = () => {
 			setWsConnected(false);
-			setInteractiveRunning(false);
+			setRunning(false);
 		};
 
-		socket.onerror = () => {
-			console.error('WebSocket error');
+		ws.onerror = () => {
 			setWsConnected(false);
-			setInteractiveRunning(false);
+			setRunning(false);
 			setError('WebSocket connection failed');
 		};
 
 		return () => {
-			socket.close();
+			ws.close();
 		};
 	}, []);
 
@@ -83,27 +101,17 @@ export default function Home() {
 		}
 
 		setError('');
-		setInteractiveRunning(true);
+		setRunning(true);
 
 		term.clear();
 		term.writeln('Running Tuna...');
-		term.writeln('');
+		term.focus();
 
 		socket.send(JSON.stringify({
 			type: 'run',
 			code
 		}));
 	};
-
-	const stopCode = () => {
-		const socket = socketRef.current;
-
-		if (!socket || socket.readyState !== WebSocket.OPEN) return;
-
-		socket.send(JSON.stringify({
-			type: 'stop'
-		}));
-	}
 
 	return (
 		<main className='p-6 w-full max-w-4xl mx-auto'>
@@ -130,17 +138,15 @@ export default function Home() {
 				onClick={runCode}
 				className='mt-4 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-400'
 				>
-				{interactiveRunning ? 'Running...' : 'Run'}
+				Run
 			</button>
 
-
-			{/* Stop Button */}
+			{/* Clear Button */}
 			<button 
-				onClick={stopCode}
-				className='mt-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-400'
-				disabled={!interactiveRunning}
+				onClick={clearTerminal}
+				className='mt-4 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600'
 				>
-				Stop 
+				Clear
 			</button>
 
 			{/* Terminal */}
@@ -148,9 +154,7 @@ export default function Home() {
 				<h2 className="text-2xl font-semibold mb-2 text-black">Terminal</h2>
 					<XTerminal
 					socketRef={socketRef}
-					onReady={(term) => {
-						terminalRef.current = term;
-					}}
+					onReady={handleTerminalReady}
 				/>
 			</div>
 
